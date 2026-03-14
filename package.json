@@ -1,0 +1,20 @@
+{
+  "name": "tastytrade-monitor",
+  "private": true,
+  "scripts": {
+    "monitor": "pnpm --filter @tastytrade-monitor/monitor run start",
+    "monitor:pipe": "pnpm --filter @tastytrade-monitor/monitor run start -- --mode pipe",
+    "monitor:file": "pnpm --filter @tastytrade-monitor/monitor run start -- --mode file",
+    "dashboard": "pnpm --filter @tastytrade-monitor/dashboard run dev",
+    "dev": "concurrently \"pnpm monitor\" \"pnpm dashboard\"",
+    "build": "pnpm --filter @tastytrade-monitor/shared build && pnpm --filter @tastytrade-monitor/monitor build && pnpm --filter @tastytrade-monitor/dashboard build",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+alerts/*.json
+alerts/*.jsonl
+packages/monitor/tokens/token.json
+.DS_Store
+*.tsbuildinfo
+.pnpmfile.cjs
+.pnpmrc
