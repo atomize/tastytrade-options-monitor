@@ -36,6 +36,8 @@ COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 COPY --from=build /app/packages/dashboard/package.json ./packages/dashboard/
 
 COPY packages/pi-agent/ ./packages/pi-agent/
+RUN cd /app/packages/pi-agent && npm install --production --ignore-scripts
+
 COPY docker/entrypoint-monitor.sh docker/entrypoint-pi.sh /app/docker/
 RUN chmod +x /app/docker/*.sh
 
