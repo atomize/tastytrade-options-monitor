@@ -39,8 +39,7 @@ export const config = {
     alertCooldownMs: 300_000,
   },
   server: {
-    port: parseInt(process.env.PORT ?? '3000', 10),
-    wsPort: parseInt(process.env.WS_PORT ?? '3001', 10),
+    wsPort: parseInt(process.env.WS_PORT ?? process.env.PORT ?? '3001', 10),
     serveDashboard: process.env.SERVE_DASHBOARD === 'true',
   },
 } as const

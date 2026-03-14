@@ -39,6 +39,6 @@ COPY packages/pi-agent/ ./packages/pi-agent/
 COPY docker/entrypoint-monitor.sh docker/entrypoint-pi.sh /app/docker/
 RUN chmod +x /app/docker/*.sh
 
-EXPOSE 3001
+EXPOSE 3001 10000
 
 CMD ["/app/docker/entrypoint-monitor.sh"]

@@ -9,10 +9,6 @@ services:
     envVars:
       - key: SERVE_DASHBOARD
         value: "true"
-      - key: WS_PORT
-        value: "3001"
-      - key: PORT
-        value: "3001"
       - fromGroup: tastytrade-secrets
     healthCheckPath: /
 
@@ -25,7 +21,7 @@ services:
     plan: starter
     envVars:
       - key: MONITOR_WS_URL
-        value: "ws://tastytrade-monitor:3001"
+        value: "ws://tastytrade-monitor:10000"
       - fromGroup: tastytrade-secrets
       - fromGroup: llm-provider
 
