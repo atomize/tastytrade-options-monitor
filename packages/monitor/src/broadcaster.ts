@@ -26,11 +26,7 @@ export function startBroadcaster(): void {
     })
     send(ws, {
       type: 'status',
-      data: {
-        connected: true,
-        symbolCount: getAllSnapshots().length,
-        uptime: Date.now() - startTime,
-      },
+      data: buildStatus(),
     })
 
     ws.on('close', () => {
@@ -54,7 +50,21 @@ export function startBroadcaster(): void {
       type: 'account',
       data: getAccountContext(),
     })
+    broadcast({
+      type: 'status',
+      data: buildStatus(),
+    })
   }, 30_000)
+}
+
+function buildStatus() {
+  return {
+    connected: true,
+    symbolCount: getAllSnapshots().length,
+    uptime: Date.now() - startTime,
+    env: config.tastytrade.env,
+    isDelayed: config.tastytrade.env === 'sandbox',
+  }
 }
 
 function broadcast(msg: WsMessage): void {

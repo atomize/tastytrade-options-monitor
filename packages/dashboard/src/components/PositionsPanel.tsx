@@ -2,13 +2,21 @@ import type { AccountContext } from '@tastytrade-monitor/shared'
 
 interface Props {
   account: AccountContext
+  env: 'sandbox' | 'production'
 }
 
-export function PositionsPanel({ account }: Props) {
+export function PositionsPanel({ account, env }: Props) {
   const totalPnl = account.openPositions.reduce((sum, p) => sum + p.pnl, 0)
 
   return (
     <div>
+      {/* Sandbox notice */}
+      {env === 'sandbox' && (
+        <div className="mb-4 bg-amber-900/20 border border-amber-800/40 rounded-lg px-4 py-2.5 text-xs text-amber-400 font-mono">
+          Sandbox: all positions and balances reset at midnight daily. Auth credentials survive the reset.
+        </div>
+      )}
+
       {/* Account summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <Card label="Net Liquidating Value" value={`$${account.netLiq.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
@@ -60,7 +68,10 @@ export function PositionsPanel({ account }: Props) {
         </div>
       ) : (
         <div className="text-center py-12 text-gray-600 text-sm">
-          No open positions.
+          {env === 'sandbox'
+            ? 'No open positions. Sandbox resets positions at midnight — place test orders to populate.'
+            : 'No open positions.'
+          }
         </div>
       )}
     </div>

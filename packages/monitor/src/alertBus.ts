@@ -3,6 +3,8 @@ import type { OptionsAlert, Severity, TriggerType } from '@tastytrade-monitor/sh
 import { getAllSnapshots, getSnapshot } from './state.js'
 import { getEntryByTicker } from './watchlist.config.js'
 import { getAccountContext } from './account.js'
+import { fetchOptionChain } from './chainFetcher.js'
+import { config } from './config.js'
 import { log } from './logger.js'
 
 export type AlertHandler = (alert: OptionsAlert) => Promise<void> | void
@@ -38,6 +40,17 @@ export async function emitAlert(input: TriggerInput): Promise<void> {
     skillHint = 'midterm-options-analysis'
   }
 
+  let optionChain: OptionsAlert['optionChain'] = []
+  if (input.ticker !== '*') {
+    try {
+      optionChain = await fetchOptionChain(input.ticker, 3)
+    } catch (err) {
+      log.warn(`Could not fetch option chain for ${input.ticker}:`, err)
+    }
+  }
+
+  const isSandbox = config.tastytrade.env === 'sandbox'
+
   const alert: OptionsAlert = {
     id: randomUUID(),
     timestamp: new Date().toISOString(),
@@ -54,9 +67,9 @@ export async function emitAlert(input: TriggerInput): Promise<void> {
     supplyChainLayer,
     skillHint,
     marketSnapshot: allSnaps,
-    optionChain: [],
+    optionChain,
     account,
-    agentContext: buildAgentContext(input, snap, allSnaps, account),
+    agentContext: buildAgentContext(input, snap, allSnaps, account, optionChain, isSandbox),
   }
 
   for (const handler of handlers) {
@@ -73,23 +86,48 @@ function buildAgentContext(
   snap: ReturnType<typeof getSnapshot>,
   allSnaps: ReturnType<typeof getAllSnapshots>,
   account: ReturnType<typeof getAccountContext>,
+  optionChain: OptionsAlert['optionChain'],
+  isSandbox: boolean,
 ): string {
   const lines: string[] = [
     `## OPTIONS ALERT — ${input.type} on ${input.ticker}`,
     `**Time:** ${new Date().toISOString()} Chicago`,
+    `**Data:** ${isSandbox ? '15-min delayed (sandbox)' : 'Real-time (production)'}`,
     `**Trigger:** ${input.description}`,
     `**Severity:** ${input.severity}`,
     '',
     '### Watchlist Snapshot',
-    '| Ticker | Price | Chg% | IV Rank | Layer |',
-    '|--------|-------|------|---------|-------|',
+    '| Ticker | Layer | Price | Chg% | IV% | IV Rank | 5m IV Δ |',
+    '|--------|-------|-------|------|-----|---------|---------|',
   ]
 
   for (const s of allSnaps) {
     if (s.price > 0) {
       lines.push(
-        `| ${s.ticker} | $${s.price.toFixed(2)} | ${s.priceChangePct1D.toFixed(1)}% | ${s.ivRank ?? 'N/A'} | ${s.layer ?? '-'} |`
+        `| ${s.ticker} | ${s.layer ?? '-'} | $${s.price.toFixed(2)} | ` +
+        `${s.priceChangePct1D >= 0 ? '+' : ''}${s.priceChangePct1D.toFixed(1)}% | ` +
+        `${s.iv != null ? s.iv.toFixed(1) + '%' : 'N/A'} | ` +
+        `${s.ivRank ?? 'N/A'} | ` +
+        `${s.ivPctChange5Min != null ? s.ivPctChange5Min.toFixed(1) + '%' : 'N/A'} |`
       )
+    }
+  }
+
+  if (optionChain.length > 0 && input.ticker !== '*') {
+    lines.push('')
+    lines.push(`### Option Chain — ${input.ticker} (nearest ${optionChain.length} expirations)`)
+    for (const exp of optionChain) {
+      lines.push(`\n**${exp.expiration}** (${exp.daysToExpiry} DTE)`)
+      lines.push('| Strike | Call Bid | Call Ask | Call IV | Put Bid | Put Ask | Put IV |')
+      lines.push('|--------|---------|---------|---------|---------|---------|--------|')
+      for (const s of exp.strikes.slice(0, 10)) {
+        lines.push(
+          `| $${s.strike} | $${s.callBid.toFixed(2)} | $${s.callAsk.toFixed(2)} | ` +
+          `${s.callIV != null ? (s.callIV * 100).toFixed(0) + '%' : '-'} | ` +
+          `$${s.putBid.toFixed(2)} | $${s.putAsk.toFixed(2)} | ` +
+          `${s.putIV != null ? (s.putIV * 100).toFixed(0) + '%' : '-'} |`
+        )
+      }
     }
   }
 
@@ -99,13 +137,24 @@ function buildAgentContext(
   lines.push(`- Buying Power: $${account.buyingPower.toLocaleString()}`)
   lines.push(`- Open Positions: ${account.openPositions.length}`)
 
+  if (account.openPositions.length > 0) {
+    for (const pos of account.openPositions) {
+      const label = pos.type === 'stock'
+        ? `${pos.ticker} stock x${pos.quantity}`
+        : `${pos.ticker} $${pos.strike} ${pos.type} ${pos.expiration ?? ''} x${pos.quantity}`
+      lines.push(`  - ${label} | P&L: $${pos.pnl.toFixed(2)} (${pos.pnlPct.toFixed(1)}%)`)
+    }
+  }
+
   if (snap) {
     lines.push('')
     lines.push(`### Triggered Ticker: ${snap.ticker}`)
     lines.push(`- Price: $${snap.price.toFixed(2)}`)
     lines.push(`- Bid/Ask: $${snap.bid.toFixed(2)} / $${snap.ask.toFixed(2)}`)
-    lines.push(`- Day Change: ${snap.priceChangePct1D.toFixed(2)}%`)
+    lines.push(`- Day Change: ${snap.priceChangePct1D >= 0 ? '+' : ''}${snap.priceChangePct1D.toFixed(2)}%`)
     if (snap.high52Week) lines.push(`- 52W Range: $${snap.low52Week?.toFixed(2)} — $${snap.high52Week.toFixed(2)}`)
+    if (snap.ivRank != null) lines.push(`- IV Rank: ${snap.ivRank}`)
+    if (snap.beta != null) lines.push(`- Beta: ${snap.beta.toFixed(2)}`)
   }
 
   return lines.join('\n')

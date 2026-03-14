@@ -1,16 +1,30 @@
-import { useState } from 'react'
-import type { TickerSnapshot } from '@tastytrade-monitor/shared'
+import { useState, useMemo } from 'react'
+import type { TickerSnapshot, OptionsAlert } from '@tastytrade-monitor/shared'
 
 interface Props {
   snapshots: TickerSnapshot[]
+  alerts: OptionsAlert[]
 }
 
 type SortKey = 'ticker' | 'price' | 'priceChangePct1D' | 'ivRank' | 'layer' | 'volume'
 
-export function WatchlistTable({ snapshots }: Props) {
+const COOLDOWN_MS = 300_000
+
+export function WatchlistTable({ snapshots, alerts }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('layer')
   const [sortAsc, setSortAsc] = useState(true)
   const [filter, setFilter] = useState('')
+
+  const recentlyAlerted = useMemo(() => {
+    const now = Date.now()
+    const tickers = new Set<string>()
+    for (const a of alerts) {
+      if (now - new Date(a.timestamp).getTime() < COOLDOWN_MS) {
+        tickers.add(a.trigger.ticker)
+      }
+    }
+    return tickers
+  }, [alerts])
 
   const filtered = snapshots.filter(s =>
     !filter || s.ticker.toLowerCase().includes(filter.toLowerCase()) ||
@@ -74,32 +88,54 @@ export function WatchlistTable({ snapshots }: Props) {
               <th className="text-left">52W Hi</th>
               <th className="text-left">52W Lo</th>
               <SortHeader k="ivRank" label="IV Rank" />
+              <th className="text-left">IV%</th>
+              <th className="text-left">5m IV Δ</th>
               <SortHeader k="volume" label="Volume" />
+              <th className="text-left">Status</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map(s => (
-              <tr
-                key={s.ticker}
-                className="hover:bg-gray-900/50 transition-colors"
-              >
-                <td className="font-semibold text-amber-400">{s.ticker}</td>
-                <td className="text-gray-500 text-[11px] max-w-[160px] truncate">{s.layer ?? '-'}</td>
-                <td>{fmtPrice(s.price)}</td>
-                <td className="text-gray-500">{fmtPrice(s.bid)}</td>
-                <td className="text-gray-500">{fmtPrice(s.ask)}</td>
-                <td className={s.priceChangePct1D >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {s.priceChangePct1D >= 0 ? '+' : ''}{s.priceChangePct1D.toFixed(2)}%
-                </td>
-                <td className="text-gray-500">{fmtPrice(s.dayOpen)}</td>
-                <td className="text-gray-500">{fmtPrice(s.dayHigh)}</td>
-                <td className="text-gray-500">{fmtPrice(s.dayLow)}</td>
-                <td className="text-gray-500">{fmtPrice(s.high52Week)}</td>
-                <td className="text-gray-500">{fmtPrice(s.low52Week)}</td>
-                <td>{s.ivRank != null ? s.ivRank.toFixed(0) : <span className="text-gray-700">-</span>}</td>
-                <td className="text-gray-500">{s.volume > 0 ? fmtVol(s.volume) : '-'}</td>
-              </tr>
-            ))}
+            {sorted.map(s => {
+              const onCooldown = recentlyAlerted.has(s.ticker)
+              return (
+                <tr
+                  key={s.ticker}
+                  className={`transition-colors ${
+                    onCooldown
+                      ? 'bg-amber-900/15 hover:bg-amber-900/25'
+                      : 'hover:bg-gray-900/50'
+                  }`}
+                >
+                  <td className="font-semibold text-amber-400">{s.ticker}</td>
+                  <td className="text-gray-500 text-[11px] max-w-[160px] truncate">{s.layer ?? '-'}</td>
+                  <td>{fmtPrice(s.price)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.bid)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.ask)}</td>
+                  <td className={s.priceChangePct1D >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {s.priceChangePct1D >= 0 ? '+' : ''}{s.priceChangePct1D.toFixed(2)}%
+                  </td>
+                  <td className="text-gray-500">{fmtPrice(s.dayOpen)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.dayHigh)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.dayLow)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.high52Week)}</td>
+                  <td className="text-gray-500">{fmtPrice(s.low52Week)}</td>
+                  <td>{s.ivRank != null ? s.ivRank.toFixed(0) : <span className="text-gray-700">-</span>}</td>
+                  <td>{s.iv != null ? `${s.iv.toFixed(1)}%` : <span className="text-gray-700">-</span>}</td>
+                  <td>{s.ivPctChange5Min != null
+                    ? <span className={s.ivPctChange5Min >= 0 ? 'text-green-400' : 'text-red-400'}>{s.ivPctChange5Min >= 0 ? '+' : ''}{s.ivPctChange5Min.toFixed(1)}%</span>
+                    : <span className="text-gray-700">-</span>
+                  }</td>
+                  <td className="text-gray-500">{s.volume > 0 ? fmtVol(s.volume) : '-'}</td>
+                  <td>
+                    {onCooldown && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-800/40 text-amber-300 uppercase">
+                        alert
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

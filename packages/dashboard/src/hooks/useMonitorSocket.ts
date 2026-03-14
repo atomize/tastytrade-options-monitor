@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { TickerSnapshot, OptionsAlert, AccountContext } from '@tastytrade-monitor/shared'
 
-interface MonitorState {
+export interface MonitorState {
   connected: boolean
   snapshots: TickerSnapshot[]
   alerts: OptionsAlert[]
   account: AccountContext
   uptime: number
+  env: 'sandbox' | 'production'
+  isDelayed: boolean
 }
 
 const WS_URL = 'ws://localhost:3001'
@@ -22,6 +24,8 @@ export function useMonitorSocket(): MonitorState {
     openPositions: [],
   })
   const [uptime, setUptime] = useState(0)
+  const [env, setEnv] = useState<'sandbox' | 'production'>('sandbox')
+  const [isDelayed, setIsDelayed] = useState(true)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -46,7 +50,7 @@ export function useMonitorSocket(): MonitorState {
 
     ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data)
+        const msg = JSON.parse(event.data as string)
         switch (msg.type) {
           case 'snapshot':
             setSnapshots(msg.data)
@@ -59,6 +63,8 @@ export function useMonitorSocket(): MonitorState {
             break
           case 'status':
             setUptime(msg.data.uptime)
+            if (msg.data.env) setEnv(msg.data.env)
+            if (msg.data.isDelayed != null) setIsDelayed(msg.data.isDelayed)
             break
         }
       } catch {
@@ -75,5 +81,5 @@ export function useMonitorSocket(): MonitorState {
     }
   }, [connect])
 
-  return { connected, snapshots, alerts, account, uptime }
+  return { connected, snapshots, alerts, account, uptime, env, isDelayed }
 }

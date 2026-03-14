@@ -1,5 +1,6 @@
 import type { TickerSnapshot } from '@tastytrade-monitor/shared'
 import { WATCHLIST, getEntryByTicker } from './watchlist.config.js'
+import { config } from './config.js'
 
 export interface PricePoint {
   price: number
@@ -26,6 +27,7 @@ function freshSnapshot(ticker: string): TickerSnapshot {
     volume: 0,
     layer: entry?.layer ?? null,
     strategies: entry?.strategies ?? [],
+    isDelayed: config.tastytrade.env === 'sandbox',
     lastUpdated: new Date().toISOString(),
   }
 }

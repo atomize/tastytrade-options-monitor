@@ -9,7 +9,7 @@ import { AgentExportPanel } from './components/AgentExportPanel.js'
 type Tab = 'watchlist' | 'alerts' | 'positions' | 'agent'
 
 export function App() {
-  const { connected, snapshots, alerts, account, uptime } = useMonitorSocket()
+  const { connected, snapshots, alerts, account, uptime, env, isDelayed } = useMonitorSocket()
   const [activeTab, setActiveTab] = useState<Tab>('watchlist')
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -27,7 +27,7 @@ export function App() {
           <h1 className="text-sm font-bold tracking-wider uppercase text-gray-300">
             tastytrade Monitor
           </h1>
-          <ConnectionStatus connected={connected} uptime={uptime} />
+          <ConnectionStatus connected={connected} uptime={uptime} env={env} isDelayed={isDelayed} />
         </div>
         <div className="flex items-center gap-4 font-mono text-xs">
           <span className="text-gray-500">Net Liq</span>
@@ -41,6 +41,13 @@ export function App() {
           </span>
         </div>
       </header>
+
+      {/* Delayed data warning banner */}
+      {isDelayed && (
+        <div className="bg-amber-900/30 border-b border-amber-800/50 px-4 py-1.5 text-center text-[11px] text-amber-400 font-mono">
+          SANDBOX — All market data is 15-minute delayed. Positions reset at midnight.
+        </div>
+      )}
 
       {/* Tab bar */}
       <nav className="border-b border-gray-800 px-4 flex gap-0 bg-[#0f0f0f]">
@@ -66,9 +73,9 @@ export function App() {
 
       {/* Content */}
       <main className="flex-1 overflow-auto p-4">
-        {activeTab === 'watchlist' && <WatchlistTable snapshots={snapshots} />}
+        {activeTab === 'watchlist' && <WatchlistTable snapshots={snapshots} alerts={alerts} />}
         {activeTab === 'alerts' && <AlertFeed alerts={alerts} />}
-        {activeTab === 'positions' && <PositionsPanel account={account} />}
+        {activeTab === 'positions' && <PositionsPanel account={account} env={env} />}
         {activeTab === 'agent' && <AgentExportPanel alerts={alerts} />}
       </main>
     </div>

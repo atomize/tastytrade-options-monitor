@@ -5,7 +5,6 @@ export const config = {
     clientId: process.env.TASTYTRADE_CLIENT_ID ?? 'd19b3650-b190-443d-9c59-90dd85a24ae9',
     clientSecret: process.env.TASTYTRADE_CLIENT_SECRET ?? '',
     refreshToken: process.env.TASTYTRADE_REFRESH_TOKEN ?? '',
-    redirectUri: process.env.TASTYTRADE_REDIRECT_URI ?? 'http://localhost:8080/callback',
     env: (process.env.TASTYTRADE_ENV ?? 'sandbox') as 'sandbox' | 'production',
   },
   triggers: {

@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws'
 
-// Node.js polyfills required by the tastytrade SDK's cometd dependency
+// Node.js polyfill: the SDK depends on isomorphic-ws and @dxfeed/dxlink-api
+// which expect a global WebSocket constructor available in the environment.
 Object.assign(globalThis, {
   WebSocket,
   window: { WebSocket, setTimeout, clearTimeout },
@@ -12,6 +13,7 @@ import { initState } from './state.js'
 import { startStreamer } from './streamer.js'
 import { startBroadcaster } from './broadcaster.js'
 import { startAccountPolling } from './account.js'
+import { startAccountStreamer } from './accountStreamer.js'
 import { startMetricsPolling } from './marketMetrics.js'
 import { startScheduledTriggers } from './marketHours.js'
 import { initOutputHandlers, type OutputMode } from './outputModes.js'
@@ -31,11 +33,17 @@ async function main() {
   const mode = parseArgs()
   setOutputMode(mode)
 
+  const isSandbox = config.tastytrade.env === 'sandbox'
+
   log.info('='.repeat(60))
   log.info('  tastytrade Options Monitor')
   log.info(`  Mode: ${mode}`)
   log.info(`  Environment: ${config.tastytrade.env}`)
   log.info(`  Symbols: ${getUniqueSymbols().length}`)
+  if (isSandbox) {
+    log.info('  ⚠ Sandbox: all quotes are 15-minute delayed')
+    log.info('  ⚠ Sandbox: positions reset at midnight daily')
+  }
   log.info('='.repeat(60))
 
   initState()
@@ -44,10 +52,13 @@ async function main() {
   const client = await initClient()
 
   startAccountPolling()
+  startAccountStreamer()
   startMetricsPolling()
 
   await startStreamer(client)
 
+  // Broadcaster runs in dashboard and file modes (dashboard needs it for the SPA,
+  // file mode also broadcasts so the dashboard can connect alongside file writes)
   if (mode !== 'pipe') {
     startBroadcaster()
     log.info(`Dashboard WebSocket: ws://localhost:${config.server.wsPort}`)

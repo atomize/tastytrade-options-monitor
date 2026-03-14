@@ -50,6 +50,7 @@ export const TickerSnapshotSchema = z.object({
 
   layer: z.string().nullable(),
   strategies: z.array(z.string()),
+  isDelayed: z.boolean(),
   lastUpdated: z.string(),
 })
 export type TickerSnapshot = z.infer<typeof TickerSnapshotSchema>
@@ -62,12 +63,14 @@ export const OptionStrikeSchema = z.object({
   callOI: z.number(),
   callDelta: z.number().optional(),
   callIV: z.number().optional(),
+  callStreamerSymbol: z.string().optional(),
   putBid: z.number(),
   putAsk: z.number(),
   putVolume: z.number(),
   putOI: z.number(),
   putDelta: z.number().optional(),
   putIV: z.number().optional(),
+  putStreamerSymbol: z.string().optional(),
 })
 export type OptionStrike = z.infer<typeof OptionStrikeSchema>
 
@@ -141,6 +144,8 @@ export const WsMessageSchema = z.discriminatedUnion('type', [
       connected: z.boolean(),
       symbolCount: z.number(),
       uptime: z.number(),
+      env: z.enum(['sandbox', 'production']),
+      isDelayed: z.boolean(),
     }),
   }),
 ])
