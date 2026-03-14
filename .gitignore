@@ -10,3 +10,4 @@ packages/monitor/tokens/token.json
 .pnpmfile.cjs
 .pnpmrc
 .pi/
+.cursor/

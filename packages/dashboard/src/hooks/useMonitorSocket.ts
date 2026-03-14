@@ -14,7 +14,16 @@ export interface MonitorState {
   requestChain: (ticker: string) => void
 }
 
-const WS_URL = 'ws://localhost:3001'
+function getWsUrl(): string {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${proto}//${window.location.hostname}:3001`
+  }
+  return `${proto}//${window.location.host}`
+}
+
+const WS_URL = getWsUrl()
 const MAX_ALERTS = 200
 const MAX_ANALYSES = 50
 

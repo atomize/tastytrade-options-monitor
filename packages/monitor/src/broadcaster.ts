@@ -1,3 +1,7 @@
+import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+import { readFileSync, existsSync, statSync } from 'node:fs'
+import { resolve, extname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
 import type { OptionsAlert, WsMessage } from '@tastytrade-monitor/shared'
 import { getAllSnapshots } from './state.js'
@@ -11,9 +15,70 @@ import { log } from './logger.js'
 let wss: WebSocketServer | null = null
 const startTime = Date.now()
 
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+}
+
+function resolveDashboardDir(): string | null {
+  const __dirname = fileURLToPath(new URL('.', import.meta.url))
+  const candidates = [
+    resolve(__dirname, '../../dashboard/dist'),
+    resolve(__dirname, '../../../dashboard/dist'),
+    '/app/packages/dashboard/dist',
+  ]
+  for (const dir of candidates) {
+    if (existsSync(join(dir, 'index.html'))) return dir
+  }
+  return null
+}
+
+function serveStatic(req: IncomingMessage, res: ServerResponse, dashDir: string): void {
+  const url = req.url ?? '/'
+  const safePath = url.split('?')[0].replace(/\.\./g, '')
+  let filePath = join(dashDir, safePath === '/' ? 'index.html' : safePath)
+
+  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    filePath = join(dashDir, 'index.html')
+  }
+
+  const ext = extname(filePath)
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream'
+
+  try {
+    const content = readFileSync(filePath)
+    res.writeHead(200, { 'Content-Type': contentType })
+    res.end(content)
+  } catch {
+    res.writeHead(500)
+    res.end('Internal Server Error')
+  }
+}
+
 export function startBroadcaster(): void {
-  wss = new WebSocketServer({ port: config.server.wsPort })
-  log.info(`WebSocket broadcaster listening on ws://localhost:${config.server.wsPort}`)
+  const dashDir = config.server.serveDashboard ? resolveDashboardDir() : null
+
+  if (config.server.serveDashboard && !dashDir) {
+    log.warn('SERVE_DASHBOARD=true but no dashboard build found — WS-only mode')
+  }
+
+  const server = createServer((req, res) => {
+    if (dashDir) {
+      serveStatic(req, res, dashDir)
+    } else {
+      res.writeHead(200, { 'Content-Type': 'text/plain' })
+      res.end('tastytrade monitor WS server')
+    }
+  })
+
+  wss = new WebSocketServer({ server })
 
   wss.on('connection', (ws) => {
     log.info(`Dashboard client connected (total: ${wss!.clients.size})`)
@@ -51,6 +116,11 @@ export function startBroadcaster(): void {
     ws.on('close', () => {
       log.info(`Dashboard client disconnected (total: ${wss!.clients.size})`)
     })
+  })
+
+  server.listen(config.server.wsPort, () => {
+    const mode = dashDir ? 'HTTP + WS' : 'WS-only'
+    log.info(`Broadcaster listening on :${config.server.wsPort} (${mode})`)
   })
 
   onAlert((alert: OptionsAlert) => {

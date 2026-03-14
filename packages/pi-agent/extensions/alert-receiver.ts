@@ -27,7 +27,7 @@ const OptionsAlertSchema = z.object({
 
 type OptionsAlert = z.infer<typeof OptionsAlertSchema>
 
-const WS_URL = 'ws://localhost:3001'
+const WS_URL = process.env.MONITOR_WS_URL || 'ws://localhost:3001'
 const MAX_QUEUE = 5
 const COOLDOWN_MS = 300_000
 
