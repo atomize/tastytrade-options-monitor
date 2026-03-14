@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: tastytrade-monitor
+    runtime: docker
+    dockerfilePath: docker/Dockerfile
+    dockerCommand: /app/docker/entrypoint-monitor.sh
+    region: oregon
+    plan: starter
+    envVars:
+      - key: SERVE_DASHBOARD
+        value: "true"
+      - key: WS_PORT
+        value: "3001"
+      - key: PORT
+        value: "3001"
+      - fromGroup: tastytrade-secrets
+    healthCheckPath: /
+
+  - type: worker
+    name: tastytrade-pi-agent
+    runtime: docker
+    dockerfilePath: docker/Dockerfile
+    dockerCommand: /app/docker/entrypoint-pi.sh
+    region: oregon
+    plan: starter
+    envVars:
+      - key: MONITOR_WS_URL
+        value: "ws://tastytrade-monitor:3001"
+      - fromGroup: tastytrade-secrets
+      - fromGroup: llm-provider
+
+envVarGroups:
+  - name: tastytrade-secrets
+    envVars:
+      - key: TASTYTRADE_CLIENT_ID
+        sync: false
+      - key: TASTYTRADE_CLIENT_SECRET
+        sync: false
+      - key: TASTYTRADE_REFRESH_TOKEN
+        sync: false
+      - key: TASTYTRADE_ENV
+        value: sandbox
+
+  - name: llm-provider
+    envVars:
+      - key: PI_PROVIDER
+        value: anthropic
+      - key: PI_MODEL
+        value: claude-sonnet-4-20250514
+      - key: ANTHROPIC_API_KEY
+        sync: false
