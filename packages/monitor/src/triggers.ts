@@ -1,6 +1,7 @@
 import type { Severity, TriggerType } from '@tastytrade-monitor/shared'
 import { config } from './config.js'
-import { getSnapshot, getPriceHistory } from './state.js'
+import { getSnapshot, getPriceHistory, getIvHistory } from './state.js'
+import { getEntryByTicker } from './watchlist.config.js'
 import { emitAlert } from './alertBus.js'
 import { log } from './logger.js'
 
@@ -22,12 +23,20 @@ function setCooldown(ticker: string, type: TriggerType): void {
 }
 
 export function checkTriggers(ticker: string): void {
-  checkPriceMove(ticker)
-  checkIvRank(ticker)
+  const entry = getEntryByTicker(ticker)
+  const isCrypto = entry?.instrumentType === 'crypto'
+
+  checkPriceMove(ticker, isCrypto)
+
+  if (!isCrypto) {
+    checkIvRank(ticker)
+    checkIvSpike(ticker)
+  }
 }
 
-function checkPriceMove(ticker: string): void {
-  if (isOnCooldown(ticker, 'PRICE_MOVE')) return
+function checkPriceMove(ticker: string, isCrypto = false): void {
+  const triggerType: TriggerType = isCrypto ? 'CRYPTO_PRICE_MOVE' : 'PRICE_MOVE'
+  if (isOnCooldown(ticker, triggerType)) return
 
   const history = getPriceHistory(ticker)
   if (history.length < 2) return
@@ -43,19 +52,21 @@ function checkPriceMove(ticker: string): void {
 
   const changePct = Math.abs((newest.price - oldest.price) / oldest.price) * 100
 
-  if (changePct >= config.triggers.priceMovePct) {
-    const severity: Severity =
-      changePct >= 6 ? 'high' :
-      changePct >= 4 ? 'medium' : 'low'
+  const threshold = isCrypto ? config.triggers.cryptoPriceMovePct : config.triggers.priceMovePct
 
-    setCooldown(ticker, 'PRICE_MOVE')
+  if (changePct >= threshold) {
+    const severity: Severity =
+      changePct >= (isCrypto ? 10 : 6) ? 'high' :
+      changePct >= (isCrypto ? 6 : 4) ? 'medium' : 'low'
+
+    setCooldown(ticker, triggerType)
     log.info(`TRIGGER: ${ticker} price moved ${changePct.toFixed(1)}% in ${config.triggers.priceMoveWindowMin}min`)
 
     emitAlert({
-      type: 'PRICE_MOVE',
+      type: triggerType,
       ticker,
       description: `${ticker} price moved ${changePct.toFixed(1)}% in ${config.triggers.priceMoveWindowMin} minutes`,
-      threshold: config.triggers.priceMovePct,
+      threshold,
       observed: changePct,
       severity,
     })
@@ -115,6 +126,42 @@ export function triggerManual(ticker: string): void {
     observed: 0,
     severity: 'medium',
   })
+}
+
+function checkIvSpike(ticker: string): void {
+  if (isOnCooldown(ticker, 'IV_SPIKE')) return
+
+  const history = getIvHistory(ticker)
+  if (history.length < 2) return
+
+  const now = Date.now()
+  const windowMs = config.triggers.priceMoveWindowMin * 60_000
+  const recent = history.filter(p => now - p.timestamp < windowMs)
+  if (recent.length < 2) return
+
+  const oldest = recent[0]
+  const newest = recent[recent.length - 1]
+  if (oldest.iv <= 0) return
+
+  const changePct = ((newest.iv - oldest.iv) / oldest.iv) * 100
+
+  if (Math.abs(changePct) >= config.triggers.ivSpikePct) {
+    const severity: Severity =
+      Math.abs(changePct) >= 30 ? 'high' :
+      Math.abs(changePct) >= 20 ? 'medium' : 'low'
+
+    setCooldown(ticker, 'IV_SPIKE')
+    log.info(`TRIGGER: ${ticker} IV spiked ${changePct.toFixed(1)}% in ${config.triggers.priceMoveWindowMin}min`)
+
+    emitAlert({
+      type: 'IV_SPIKE',
+      ticker,
+      description: `${ticker} IV ${changePct > 0 ? 'spiked' : 'dropped'} ${Math.abs(changePct).toFixed(1)}% in ${config.triggers.priceMoveWindowMin} minutes`,
+      threshold: config.triggers.ivSpikePct,
+      observed: Math.abs(changePct),
+      severity,
+    })
+  }
 }
 
 export function triggerScheduled(type: 'SCHEDULED_OPEN' | 'SCHEDULED_CLOSE'): void {

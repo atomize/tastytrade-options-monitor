@@ -19,11 +19,13 @@ export const config = {
     clientSecret: process.env.TASTYTRADE_CLIENT_SECRET ?? '',
     refreshToken: process.env.TASTYTRADE_REFRESH_TOKEN ?? '',
     env: (process.env.TASTYTRADE_ENV ?? 'sandbox') as 'sandbox' | 'production',
+    enableTradeScope: process.env.TASTYTRADE_ENABLE_TRADE_SCOPE === 'true',
   },
   triggers: {
     ivSpikePct: 15,
     priceMoveWindowMin: 10,
     priceMovePct: 3,
+    cryptoPriceMovePct: 5,
     ivRankBuyThreshold: 20,
     ivRankSellThreshold: 50,
   },

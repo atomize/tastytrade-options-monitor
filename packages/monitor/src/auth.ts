@@ -25,11 +25,18 @@ export async function initClient(): Promise<TastytradeClient> {
 
   log.info(`Connecting to tastytrade ${isSandbox ? 'sandbox' : 'production'}...`)
 
+  const scopes: string[] = ['read', 'openid']
+  if (config.tastytrade.enableTradeScope) {
+    scopes.push('trade')
+  }
+
+  log.info(`OAuth scopes: ${scopes.join(', ')}${config.tastytrade.enableTradeScope ? '' : ' (read-only — trade scope disabled)'}`)
+
   client = new TastytradeClient({
     ...baseConfig,
     clientSecret: config.tastytrade.clientSecret,
     refreshToken: config.tastytrade.refreshToken,
-    oauthScopes: ['read', 'trade', 'openid'],
+    oauthScopes: scopes,
   } as ConstructorParameters<typeof TastytradeClient>[0])
 
   log.info('tastytrade client initialized')

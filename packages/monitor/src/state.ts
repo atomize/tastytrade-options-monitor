@@ -4,13 +4,18 @@ import { config } from './config.js'
 
 export interface PricePoint {
   price: number
-  iv?: number
+  timestamp: number
+}
+
+export interface IvPoint {
+  iv: number
   timestamp: number
 }
 
 interface TickerState {
   snapshot: TickerSnapshot
   priceHistory: PricePoint[]
+  ivHistory: IvPoint[]
 }
 
 const state = new Map<string, TickerState>()
@@ -38,6 +43,7 @@ export function initState(): void {
       state.set(entry.ticker, {
         snapshot: freshSnapshot(entry.ticker),
         priceHistory: [],
+        ivHistory: [],
       })
     }
   }
@@ -53,6 +59,10 @@ export function getAllSnapshots(): TickerSnapshot[] {
 
 export function getPriceHistory(ticker: string): PricePoint[] {
   return state.get(ticker)?.priceHistory ?? []
+}
+
+export function getIvHistory(ticker: string): IvPoint[] {
+  return state.get(ticker)?.ivHistory ?? []
 }
 
 const MAX_HISTORY = 200
@@ -135,7 +145,19 @@ export function updateMarketMetrics(
   const ts = state.get(ticker)
   if (!ts) return
 
-  if (data.iv != null) ts.snapshot.iv = data.iv
+  if (data.iv != null) {
+    const oldIv = ts.snapshot.iv
+    ts.snapshot.iv = data.iv
+
+    ts.ivHistory.push({ iv: data.iv, timestamp: Date.now() })
+    if (ts.ivHistory.length > MAX_HISTORY) {
+      ts.ivHistory.splice(0, ts.ivHistory.length - MAX_HISTORY)
+    }
+
+    if (oldIv != null && oldIv > 0) {
+      ts.snapshot.ivPctChange5Min = ((data.iv - oldIv) / oldIv) * 100
+    }
+  }
   if (data.ivRank != null) ts.snapshot.ivRank = data.ivRank
   if (data.ivPercentile != null) ts.snapshot.ivPercentile = data.ivPercentile
 }

@@ -14,6 +14,7 @@ const SEVERITY_CLASSES: Record<string, string> = {
 const TRIGGER_LABELS: Record<string, string> = {
   IV_SPIKE: 'IV Spike',
   PRICE_MOVE: 'Price Move',
+  CRYPTO_PRICE_MOVE: 'Crypto Move',
   IV_RANK_HIGH: 'IV Rank High',
   IV_RANK_LOW: 'IV Rank Low',
   SCHEDULED_OPEN: 'Scheduled Open',

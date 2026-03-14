@@ -1,6 +1,7 @@
 import { STREAMER_STATE } from '@tastytrade/api'
 import { getClient } from './auth.js'
 import { fetchAccountData } from './account.js'
+import { config } from './config.js'
 import { log } from './logger.js'
 
 let accountNumber: string | null = null
@@ -11,6 +12,11 @@ let accountNumber: string | null = null
  * in account.ts by giving instant updates when trades execute.
  */
 export async function startAccountStreamer(): Promise<void> {
+  if (!config.tastytrade.enableTradeScope) {
+    log.info('Account streamer skipped (trade scope disabled — read-only mode)')
+    return
+  }
+
   try {
     const client = getClient()
 

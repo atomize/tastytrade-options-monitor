@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const TriggerTypeSchema = z.enum([
   'IV_SPIKE',
   'PRICE_MOVE',
+  'CRYPTO_PRICE_MOVE',
   'IV_RANK_HIGH',
   'IV_RANK_LOW',
   'SCHEDULED_OPEN',
@@ -125,6 +126,23 @@ export const OptionsAlertSchema = z.object({
 })
 export type OptionsAlert = z.infer<typeof OptionsAlertSchema>
 
+export const AgentAnalysisSchema = z.object({
+  alertId: z.string(),
+  timestamp: z.string(),
+  model: z.string(),
+  analysis: z.string(),
+  ticker: z.string(),
+  triggerType: TriggerTypeSchema,
+})
+export type AgentAnalysis = z.infer<typeof AgentAnalysisSchema>
+
+export const OptionChainResponseSchema = z.object({
+  ticker: z.string(),
+  expirations: z.array(OptionExpirationSchema),
+  instrumentType: z.enum(['equity', 'crypto']),
+})
+export type OptionChainResponse = z.infer<typeof OptionChainResponseSchema>
+
 export const WsMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('alert'),
@@ -148,5 +166,21 @@ export const WsMessageSchema = z.discriminatedUnion('type', [
       isDelayed: z.boolean(),
     }),
   }),
+  z.object({
+    type: z.literal('optionChain'),
+    data: OptionChainResponseSchema,
+  }),
+  z.object({
+    type: z.literal('agent_analysis'),
+    data: AgentAnalysisSchema,
+  }),
 ])
 export type WsMessage = z.infer<typeof WsMessageSchema>
+
+export const WsClientMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('requestChain'),
+    ticker: z.string(),
+  }),
+])
+export type WsClientMessage = z.infer<typeof WsClientMessageSchema>

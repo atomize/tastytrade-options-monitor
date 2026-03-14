@@ -5,17 +5,21 @@ import { WatchlistTable } from './components/WatchlistTable.js'
 import { AlertFeed } from './components/AlertFeed.js'
 import { PositionsPanel } from './components/PositionsPanel.js'
 import { AgentExportPanel } from './components/AgentExportPanel.js'
+import { OptionChainPanel } from './components/OptionChainPanel.js'
+import { AnalysisPanel } from './components/AnalysisPanel.js'
 
-type Tab = 'watchlist' | 'alerts' | 'positions' | 'agent'
+type Tab = 'watchlist' | 'options' | 'alerts' | 'positions' | 'analysis' | 'agent'
 
 export function App() {
-  const { connected, snapshots, alerts, account, uptime, env, isDelayed } = useMonitorSocket()
+  const { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain } = useMonitorSocket()
   const [activeTab, setActiveTab] = useState<Tab>('watchlist')
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'watchlist', label: 'Watchlist', count: snapshots.length },
+    { id: 'options', label: 'Options' },
     { id: 'alerts', label: 'Alerts', count: alerts.length },
     { id: 'positions', label: 'Positions', count: account.openPositions.length },
+    { id: 'analysis', label: 'AI Analysis', count: analyses.length || undefined },
     { id: 'agent', label: 'Agent Export' },
   ]
 
@@ -74,8 +78,10 @@ export function App() {
       {/* Content */}
       <main className="flex-1 overflow-auto p-4">
         {activeTab === 'watchlist' && <WatchlistTable snapshots={snapshots} alerts={alerts} />}
+        {activeTab === 'options' && <OptionChainPanel snapshots={snapshots} optionChain={optionChain} requestChain={requestChain} />}
         {activeTab === 'alerts' && <AlertFeed alerts={alerts} />}
         {activeTab === 'positions' && <PositionsPanel account={account} env={env} />}
+        {activeTab === 'analysis' && <AnalysisPanel analyses={analyses} />}
         {activeTab === 'agent' && <AgentExportPanel alerts={alerts} />}
       </main>
     </div>

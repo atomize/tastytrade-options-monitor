@@ -1,5 +1,5 @@
 import { getClient } from './auth.js'
-import { getUniqueSymbols } from './watchlist.config.js'
+import { WATCHLIST, getUniqueSymbols } from './watchlist.config.js'
 import { updateMarketMetrics } from './state.js'
 import { config } from './config.js'
 import { log } from './logger.js'
@@ -12,7 +12,10 @@ export async function fetchMarketMetrics(): Promise<void> {
 
   try {
     const client = getClient()
-    const symbols = getUniqueSymbols()
+    const cryptoSet = new Set(
+      WATCHLIST.filter(e => e.instrumentType === 'crypto').map(e => e.ticker)
+    )
+    const symbols = getUniqueSymbols().filter(s => !cryptoSet.has(s))
 
     const response = await client.marketMetricsService.getMarketMetrics({
       symbols: symbols.join(','),

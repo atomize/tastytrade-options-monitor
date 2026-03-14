@@ -1,23 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { TickerSnapshot, OptionsAlert, AccountContext } from '@tastytrade-monitor/shared'
+import type { TickerSnapshot, OptionsAlert, AccountContext, OptionChainResponse, AgentAnalysis } from '@tastytrade-monitor/shared'
 
 export interface MonitorState {
   connected: boolean
   snapshots: TickerSnapshot[]
   alerts: OptionsAlert[]
+  analyses: AgentAnalysis[]
   account: AccountContext
   uptime: number
   env: 'sandbox' | 'production'
   isDelayed: boolean
+  optionChain: OptionChainResponse | null
+  requestChain: (ticker: string) => void
 }
 
 const WS_URL = 'ws://localhost:3001'
 const MAX_ALERTS = 200
+const MAX_ANALYSES = 50
 
 export function useMonitorSocket(): MonitorState {
   const [connected, setConnected] = useState(false)
   const [snapshots, setSnapshots] = useState<TickerSnapshot[]>([])
   const [alerts, setAlerts] = useState<OptionsAlert[]>([])
+  const [analyses, setAnalyses] = useState<AgentAnalysis[]>([])
   const [account, setAccount] = useState<AccountContext>({
     netLiq: 0,
     buyingPower: 0,
@@ -26,8 +31,15 @@ export function useMonitorSocket(): MonitorState {
   const [uptime, setUptime] = useState(0)
   const [env, setEnv] = useState<'sandbox' | 'production'>('sandbox')
   const [isDelayed, setIsDelayed] = useState(true)
+  const [optionChain, setOptionChain] = useState<OptionChainResponse | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  const requestChain = useCallback((ticker: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'requestChain', ticker }))
+    }
+  }, [])
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
@@ -66,6 +78,12 @@ export function useMonitorSocket(): MonitorState {
             if (msg.data.env) setEnv(msg.data.env)
             if (msg.data.isDelayed != null) setIsDelayed(msg.data.isDelayed)
             break
+          case 'optionChain':
+            setOptionChain(msg.data)
+            break
+          case 'agent_analysis':
+            setAnalyses(prev => [msg.data, ...prev].slice(0, MAX_ANALYSES))
+            break
         }
       } catch {
         // ignore malformed messages
@@ -81,5 +99,5 @@ export function useMonitorSocket(): MonitorState {
     }
   }, [connect])
 
-  return { connected, snapshots, alerts, account, uptime, env, isDelayed }
+  return { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain }
 }

@@ -1,6 +1,6 @@
 import type TastytradeClient from '@tastytrade/api'
 import { MarketDataSubscriptionType } from '@tastytrade/api'
-import { getUniqueSymbols } from './watchlist.config.js'
+import { getUniqueSymbols, WATCHLIST } from './watchlist.config.js'
 import {
   updateQuote,
   updateTrade,
@@ -13,8 +13,46 @@ import { log } from './logger.js'
 let reconnectAttempts = 0
 const MAX_RECONNECT_DELAY = 60_000
 
+const cryptoStreamerMap = new Map<string, string>()
+
+async function resolveCryptoStreamerSymbols(client: TastytradeClient): Promise<void> {
+  const cryptoTickers = WATCHLIST
+    .filter(e => e.instrumentType === 'crypto')
+    .map(e => e.ticker)
+
+  if (cryptoTickers.length === 0) return
+
+  try {
+    const response = await client.instrumentsService.getCryptocurrencies(cryptoTickers) as Record<string, unknown>
+    const items = (response?.items ?? response) as Record<string, unknown>[]
+
+    if (!Array.isArray(items)) {
+      log.warn('No crypto instruments returned from API')
+      return
+    }
+
+    for (const item of items) {
+      const symbol = String(item.symbol ?? '')
+      const streamerSymbol = String(item['streamer-symbol'] ?? item.streamerSymbol ?? '')
+      if (symbol && streamerSymbol) {
+        cryptoStreamerMap.set(symbol, streamerSymbol)
+        log.info(`Crypto streamer symbol: ${symbol} → ${streamerSymbol}`)
+      }
+    }
+  } catch (err) {
+    log.warn('Could not resolve crypto streamer symbols, using ticker names as fallback:', err)
+  }
+}
+
+function resolveStreamerSymbol(ticker: string): string {
+  return cryptoStreamerMap.get(ticker) ?? ticker
+}
+
 export async function startStreamer(client: TastytradeClient): Promise<void> {
-  const symbols = getUniqueSymbols()
+  await resolveCryptoStreamerSymbols(client)
+  buildReverseMap()
+
+  const symbols = getUniqueSymbols().map(resolveStreamerSymbol)
   log.info(`Subscribing to ${symbols.length} symbols via DXLink...`)
 
   const streamer = client.quoteStreamer
@@ -54,6 +92,18 @@ function scheduleReconnect(client: TastytradeClient): void {
   setTimeout(() => startStreamer(client), delay)
 }
 
+const reverseStreamerMap = new Map<string, string>()
+
+function buildReverseMap(): void {
+  for (const [ticker, streamer] of cryptoStreamerMap) {
+    reverseStreamerMap.set(streamer, ticker)
+  }
+}
+
+function resolveEventTicker(eventSymbol: string): string {
+  return reverseStreamerMap.get(eventSymbol) ?? eventSymbol
+}
+
 interface DxEvent {
   eventType?: string
   eventSymbol?: string
@@ -62,8 +112,9 @@ interface DxEvent {
 
 function processEvent(raw: unknown): void {
   const event = raw as DxEvent
-  const ticker = event.eventSymbol as string | undefined
-  if (!ticker) return
+  const rawSymbol = event.eventSymbol as string | undefined
+  if (!rawSymbol) return
+  const ticker = resolveEventTicker(rawSymbol)
 
   switch (event.eventType) {
     case 'Quote':

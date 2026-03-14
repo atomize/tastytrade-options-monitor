@@ -7,6 +7,10 @@
     "monitor:file": "pnpm --filter @tastytrade-monitor/monitor run start -- --mode file",
     "dashboard": "pnpm --filter @tastytrade-monitor/dashboard run dev",
     "dev": "concurrently \"pnpm monitor\" \"pnpm dashboard\"",
+    "agent:setup": "pi install ./packages/pi-agent",
+    "agent:start": "cd packages/pi-agent && pi",
+    "agent:pipe": "pnpm monitor:pipe | (cd packages/pi-agent && pi --mode rpc --no-session)",
+    "dev:full": "concurrently \"pnpm monitor\" \"pnpm dashboard\" \"pnpm agent:start\"",
     "build": "pnpm --filter @tastytrade-monitor/shared build && pnpm --filter @tastytrade-monitor/monitor build && pnpm --filter @tastytrade-monitor/dashboard build",
     "typecheck": "pnpm -r run typecheck"
   },

@@ -9,3 +9,4 @@ packages/monitor/tokens/token.json
 *.tsbuildinfo
 .pnpmfile.cjs
 .pnpmrc
+.pi/

@@ -8,7 +8,10 @@ export {
   AccountPositionSchema,
   AccountContextSchema,
   OptionsAlertSchema,
+  AgentAnalysisSchema,
+  OptionChainResponseSchema,
   WsMessageSchema,
+  WsClientMessageSchema,
 } from './alert.schema.js'
 
 export type {
@@ -21,5 +24,8 @@ export type {
   AccountPosition,
   AccountContext,
   OptionsAlert,
+  AgentAnalysis,
+  OptionChainResponse,
   WsMessage,
+  WsClientMessage,
 } from './alert.schema.js'

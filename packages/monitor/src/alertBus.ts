@@ -40,8 +40,10 @@ export async function emitAlert(input: TriggerInput): Promise<void> {
     skillHint = 'midterm-options-analysis'
   }
 
+  const isCrypto = entry?.instrumentType === 'crypto'
+
   let optionChain: OptionsAlert['optionChain'] = []
-  if (input.ticker !== '*') {
+  if (input.ticker !== '*' && !isCrypto) {
     try {
       optionChain = await fetchOptionChain(input.ticker, 3)
     } catch (err) {
@@ -113,7 +115,19 @@ function buildAgentContext(
     }
   }
 
-  if (optionChain.length > 0 && input.ticker !== '*') {
+  const entry = getEntryByTicker(input.ticker)
+  const isCrypto = entry?.instrumentType === 'crypto'
+
+  if (isCrypto && snap && input.ticker !== '*') {
+    lines.push('')
+    lines.push(`### Crypto Spot — ${input.ticker}`)
+    lines.push('This is a spot crypto instrument — no options chain is available on tastytrade.')
+    lines.push('Focus: price action, volume, and momentum for directional or hedging decisions.')
+    lines.push(`- 24h Market: crypto trades around the clock including weekends`)
+    if (snap.dayHigh != null && snap.dayLow != null) {
+      lines.push(`- Day Range: $${snap.dayLow.toFixed(2)} — $${snap.dayHigh.toFixed(2)}`)
+    }
+  } else if (optionChain.length > 0 && input.ticker !== '*') {
     lines.push('')
     lines.push(`### Option Chain — ${input.ticker} (nearest ${optionChain.length} expirations)`)
     for (const exp of optionChain) {

@@ -1,5 +1,6 @@
 import type { OptionExpiration } from '@tastytrade-monitor/shared'
 import { getClient } from './auth.js'
+import { getEntryByTicker } from './watchlist.config.js'
 import { config } from './config.js'
 import { log } from './logger.js'
 
@@ -11,6 +12,11 @@ export async function fetchOptionChain(
   symbol: string,
   maxExpirations = 3,
 ): Promise<OptionExpiration[]> {
+  const entry = getEntryByTicker(symbol)
+  if (entry?.instrumentType === 'crypto') {
+    return []
+  }
+
   try {
     const client = getClient()
     const raw = await client.instrumentsService.getNestedOptionChain(symbol) as Record<string, unknown>

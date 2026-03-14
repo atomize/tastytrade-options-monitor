@@ -106,7 +106,14 @@ export function WatchlistTable({ snapshots, alerts }: Props) {
                       : 'hover:bg-gray-900/50'
                   }`}
                 >
-                  <td className="font-semibold text-amber-400">{s.ticker}</td>
+                  <td className="font-semibold text-amber-400">
+                    {s.ticker}
+                    {s.strategies?.includes('crypto') && (
+                      <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-purple-900/50 text-purple-400 border border-purple-800/50 uppercase font-bold">
+                        crypto
+                      </span>
+                    )}
+                  </td>
                   <td className="text-gray-500 text-[11px] max-w-[160px] truncate">{s.layer ?? '-'}</td>
                   <td>{fmtPrice(s.price)}</td>
                   <td className="text-gray-500">{fmtPrice(s.bid)}</td>
