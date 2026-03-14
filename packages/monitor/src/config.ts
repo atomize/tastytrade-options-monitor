@@ -1,4 +1,17 @@
-import 'dotenv/config'
+import { config as dotenvConfig } from 'dotenv'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Walk up from packages/monitor/dist (or src) to find .env at repo root
+let envDir = __dirname
+for (let i = 0; i < 5; i++) {
+  if (existsSync(resolve(envDir, '.env'))) break
+  envDir = resolve(envDir, '..')
+}
+dotenvConfig({ path: resolve(envDir, '.env') })
 
 export const config = {
   tastytrade: {
