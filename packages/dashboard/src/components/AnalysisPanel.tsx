@@ -1,26 +1,27 @@
 import { useState } from 'react'
-import type { AgentAnalysis } from '@tastytrade-monitor/shared'
+import type { AgentAnalysis, AgentStatus } from '@tastytrade-monitor/shared'
 
 interface Props {
   analyses: AgentAnalysis[]
+  agentStatus: AgentStatus | null
 }
 
-export function AnalysisPanel({ analyses }: Props) {
+export function AnalysisPanel({ analyses, agentStatus }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const isProcessing = agentStatus?.state === 'processing'
 
-  if (analyses.length === 0) {
+  if (analyses.length === 0 && !isProcessing) {
     return (
       <div className="text-center py-16">
         <div className="inline-block bg-gray-900/50 border border-gray-800 rounded-lg px-8 py-6">
-          <p className="text-gray-400 text-sm font-medium mb-2">
-            No agent analyses yet
+          <p className="text-gray-400 text-sm font-medium mb-1">
+            No analyses yet
           </p>
-          <p className="text-gray-600 text-xs max-w-sm">
-            Start the pi agent to receive AI-powered trade analyses for each alert.
+          <p className="text-gray-600 text-xs max-w-xs">
+            {agentStatus?.connected
+              ? 'Agent is connected and waiting for alerts to analyze.'
+              : 'Agent is offline. Analyses will appear here once alerts are processed.'}
           </p>
-          <pre className="mt-4 bg-black/50 rounded p-3 text-[11px] text-green-400 font-mono text-left">
-            cd packages/pi-agent && pi
-          </pre>
         </div>
       </div>
     )
@@ -28,6 +29,14 @@ export function AnalysisPanel({ analyses }: Props) {
 
   return (
     <div className="space-y-2 max-w-4xl">
+      {isProcessing && (
+        <div className="border border-amber-800/50 bg-amber-900/20 rounded-lg px-4 py-3 flex items-center gap-3">
+          <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-amber-400 text-sm font-mono">
+            Analyzing {agentStatus.currentTicker ?? '...'}
+          </span>
+        </div>
+      )}
       {analyses.map(a => {
         const isExpanded = expandedId === a.alertId + a.timestamp
         const key = a.alertId + a.timestamp

@@ -110,7 +110,7 @@ export function App() {
         {activeTab === 'options' && <OptionChainPanel snapshots={snapshots} optionChain={optionChain} requestChain={requestChain} />}
         {activeTab === 'alerts' && <AlertFeed alerts={alerts} />}
         {activeTab === 'positions' && <PositionsPanel account={account} env={env} />}
-        {activeTab === 'analysis' && <AnalysisPanel analyses={analyses} />}
+        {activeTab === 'analysis' && <AnalysisPanel analyses={analyses} agentStatus={agentStatus} />}
         {activeTab === 'agent' && <AgentExportPanel alerts={alerts} env={env} sendRaw={sendRaw} />}
       </main>
     </div>

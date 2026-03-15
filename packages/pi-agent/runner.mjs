@@ -91,6 +91,7 @@ function invokePi(prompt) {
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
+    let settled = false
 
     log(`Spawning pi --print (prompt: ${prompt.length} chars)`)
 
@@ -99,32 +100,40 @@ function invokePi(prompt) {
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      log('pi timeout — killing process')
+      child.kill('SIGTERM')
+      setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, 5000)
+      reject(new Error('pi timed out'))
+    }, PI_TIMEOUT_MS)
+
     child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
     child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
 
     child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       log(`pi spawn error: ${err.message}`)
       reject(err)
     })
 
     child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       if (stderr) log(`pi stderr: ${stderr.slice(0, 500)}`)
       if (code !== 0) {
         log(`pi exited with code ${code}`)
-        return reject(new Error(`pi exited with code ${code}`))
+        return reject(new Error(`pi exited ${code}: ${stderr.slice(0, 200)}`))
       }
       resolve(stdout.trim())
     })
 
     child.stdin.write(prompt)
     child.stdin.end()
-
-    setTimeout(() => {
-      log('pi timeout — killing process')
-      child.kill('SIGTERM')
-      setTimeout(() => child.kill('SIGKILL'), 5000)
-      reject(new Error('pi timed out'))
-    }, PI_TIMEOUT_MS)
   })
 }
 
@@ -164,8 +173,9 @@ async function processAlert(alert) {
     }
     sendStatus('idle', null, null)
   } catch (err) {
-    log(`pi invocation failed for ${ticker}: ${err.message}`)
-    sendStatus('error', null, err.message)
+    const errMsg = err.message?.slice(0, 200) || 'unknown error'
+    log(`pi invocation failed for ${ticker}: ${errMsg}`)
+    sendStatus('error', ticker, errMsg)
   }
 
   isProcessing = false
