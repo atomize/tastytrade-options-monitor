@@ -65,10 +65,12 @@ fi
 echo "[pi-agent] Installing tastytrade alert-receiver extension"
 pi install /app/packages/pi-agent
 
-# ── Export env vars the extension reads ──────────────────────────
+# ── Export env vars ──────────────────────────────────────────────
 export MONITOR_WS_URL
+export PI_MODEL
 
-# ── Start pi ─────────────────────────────────────────────────────
-echo "[pi-agent] Starting pi agent"
-cd /app/packages/pi-agent
-exec pi --print --no-session
+# ── Start the persistent runner ──────────────────────────────────
+# The runner stays alive, listens for alerts on WS, and invokes
+# `pi --print --no-session` on-demand for each alert.
+echo "[pi-agent] Starting persistent alert runner"
+exec node /app/packages/pi-agent/runner.mjs
