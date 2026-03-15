@@ -12,6 +12,7 @@ export interface MonitorState {
   isDelayed: boolean
   optionChain: OptionChainResponse | null
   requestChain: (ticker: string) => void
+  sendRaw: (msg: unknown) => void
 }
 
 function getWsUrl(): string {
@@ -47,6 +48,12 @@ export function useMonitorSocket(): MonitorState {
   const requestChain = useCallback((ticker: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'requestChain', ticker }))
+    }
+  }, [])
+
+  const sendRaw = useCallback((msg: unknown) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg))
     }
   }, [])
 
@@ -108,5 +115,5 @@ export function useMonitorSocket(): MonitorState {
     }
   }, [connect])
 
-  return { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain }
+  return { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain, sendRaw }
 }

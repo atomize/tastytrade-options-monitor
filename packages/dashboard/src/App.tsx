@@ -11,7 +11,7 @@ import { AnalysisPanel } from './components/AnalysisPanel.js'
 type Tab = 'watchlist' | 'options' | 'alerts' | 'positions' | 'analysis' | 'agent'
 
 export function App() {
-  const { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain } = useMonitorSocket()
+  const { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain, sendRaw } = useMonitorSocket()
   const [activeTab, setActiveTab] = useState<Tab>('watchlist')
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -82,7 +82,7 @@ export function App() {
         {activeTab === 'alerts' && <AlertFeed alerts={alerts} />}
         {activeTab === 'positions' && <PositionsPanel account={account} env={env} />}
         {activeTab === 'analysis' && <AnalysisPanel analyses={analyses} />}
-        {activeTab === 'agent' && <AgentExportPanel alerts={alerts} />}
+        {activeTab === 'agent' && <AgentExportPanel alerts={alerts} env={env} sendRaw={sendRaw} />}
       </main>
     </div>
   )

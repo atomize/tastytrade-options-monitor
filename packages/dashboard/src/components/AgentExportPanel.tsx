@@ -3,10 +3,117 @@ import type { OptionsAlert } from '@tastytrade-monitor/shared'
 
 interface Props {
   alerts: OptionsAlert[]
+  env: 'sandbox' | 'production'
+  sendRaw: (msg: unknown) => void
 }
 
-export function AgentExportPanel({ alerts }: Props) {
+const TEST_TICKERS = [
+  { ticker: 'AMKR', layer: 'Layer 1 — Chip Packaging', strategy: 'supply_chain', trigger: 'IV_SPIKE' },
+  { ticker: 'VRT',  layer: 'Layer 5 — Thermal & Power', strategy: 'supply_chain', trigger: 'PRICE_MOVE' },
+  { ticker: 'NVDA', layer: 'Macro — AI Semis', strategy: 'midterm_macro', trigger: 'IV_RANK_HIGH' },
+  { ticker: 'BTC/USD', layer: null, strategy: 'crypto', trigger: 'CRYPTO_PRICE_MOVE' },
+] as const
+
+function buildTestAlert(opt: typeof TEST_TICKERS[number]) {
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const isCrypto = opt.strategy === 'crypto'
+
+  return {
+    id,
+    timestamp: now,
+    version: '1.0' as const,
+    trigger: {
+      type: opt.trigger,
+      ticker: opt.ticker,
+      description: isCrypto
+        ? `${opt.ticker} price moved 6.2% in 10 minutes (threshold: 5%)`
+        : `${opt.ticker} implied volatility spiked 22% in 5 minutes (threshold: 15%)`,
+      threshold: isCrypto ? 5 : 15,
+      observed: isCrypto ? 6.2 : 22,
+    },
+    severity: 'high',
+    strategies: [opt.strategy],
+    supplyChainLayer: opt.layer,
+    skillHint: opt.strategy === 'supply_chain' ? 'ai-hidden-supply-chain-options' : undefined,
+    marketSnapshot: [{
+      ticker: opt.ticker,
+      price: isCrypto ? 67420.50 : 28.45,
+      bid: isCrypto ? 67415.00 : 28.40,
+      ask: isCrypto ? 67426.00 : 28.50,
+      priceChange1D: isCrypto ? 3850.20 : 1.23,
+      priceChangePct1D: isCrypto ? 6.05 : 4.52,
+      iv: isCrypto ? undefined : 0.68,
+      ivRank: isCrypto ? undefined : 72,
+      ivPercentile: isCrypto ? undefined : 80,
+      ivPctChange5Min: isCrypto ? undefined : 22.0,
+      volume: isCrypto ? 12500000000 : 3240000,
+      layer: opt.layer,
+      strategies: [opt.strategy],
+      isDelayed: true,
+      lastUpdated: now,
+    }],
+    optionChain: isCrypto ? [] : [{
+      expiration: '2026-04-17',
+      daysToExpiry: 34,
+      strikes: [
+        { strike: 27, callBid: 2.10, callAsk: 2.25, callVolume: 450, callOI: 1200, callDelta: 0.65, callIV: 0.62, putBid: 0.55, putAsk: 0.70, putVolume: 320, putOI: 890, putDelta: -0.35, putIV: 0.68 },
+        { strike: 28, callBid: 1.45, callAsk: 1.60, callVolume: 680, callOI: 1800, callDelta: 0.52, callIV: 0.65, putBid: 0.90, putAsk: 1.05, putVolume: 510, putOI: 1400, putDelta: -0.48, putIV: 0.70 },
+        { strike: 30, callBid: 0.65, callAsk: 0.80, callVolume: 920, callOI: 2400, callDelta: 0.32, callIV: 0.72, putBid: 2.05, putAsk: 2.20, putVolume: 180, putOI: 600, putDelta: -0.68, putIV: 0.75 },
+      ],
+    }],
+    account: { netLiq: 25000, buyingPower: 18500, openPositions: [] },
+    agentContext: isCrypto
+      ? `## OPTIONS ALERT — ${opt.trigger} on ${opt.ticker}
+**Time:** ${now} Chicago
+**Data:** 15-min delayed (sandbox)
+**Trigger:** ${opt.ticker} price moved 6.2% in 10 minutes (threshold: 5%)
+**Severity:** HIGH
+
+### Strategy
+Crypto Spot | No options available on tastytrade for crypto
+
+### Market Data
+| Ticker | Price | Chg% | Volume |
+|--------|-------|------|--------|
+| ${opt.ticker} | $67,420.50 | +6.05% | $12.5B |
+
+### Account
+- Net Liq: $25,000
+- Buying Power: $18,500
+- Open Positions: None`
+      : `## OPTIONS ALERT — ${opt.trigger} on ${opt.ticker}
+**Time:** ${now} Chicago
+**Data:** 15-min delayed (sandbox)
+**Trigger:** ${opt.ticker} implied volatility spiked 22% in 5 minutes (threshold: 15%)
+**Severity:** HIGH
+
+### Supply Chain Layer
+${opt.layer} | Strategy: AI Hidden Supply Chain
+
+### Watchlist Snapshot
+| Ticker | Layer | Price | Chg% | IV% | IV Rank | 5m IV Δ |
+|--------|-------|-------|------|-----|---------|---------|
+| ${opt.ticker} | ${opt.layer?.split(' — ')[1] ?? 'Macro'} | $28.45 | +4.52% | 68% | 72 | +22.0% |
+
+### Option Chain — ${opt.ticker} (nearest 1 expiration)
+**Expiry: 2026-04-17 (34 DTE)**
+| Strike | C Bid | C Ask | C Vol | C OI | C Δ | C IV | P Bid | P Ask | P Vol | P OI | P Δ | P IV |
+|--------|-------|-------|-------|------|-----|------|-------|-------|-------|------|-----|------|
+| 27 | 2.10 | 2.25 | 450 | 1200 | .65 | 62% | 0.55 | 0.70 | 320 | 890 | -.35 | 68% |
+| 28 | 1.45 | 1.60 | 680 | 1800 | .52 | 65% | 0.90 | 1.05 | 510 | 1400 | -.48 | 70% |
+| 30 | 0.65 | 0.80 | 920 | 2400 | .32 | 72% | 2.05 | 2.20 | 180 | 600 | -.68 | 75% |
+
+### Account
+- Net Liq: $25,000
+- Buying Power: $18,500
+- Open Positions: None`,
+  }
+}
+
+export function AgentExportPanel({ alerts, env, sendRaw }: Props) {
   const [copied, setCopied] = useState<string | null>(null)
+  const [fired, setFired] = useState<string | null>(null)
 
   const lastAlert = alerts[0]
 
@@ -16,8 +123,47 @@ export function AgentExportPanel({ alerts }: Props) {
     setTimeout(() => setCopied(null), 2000)
   }
 
+  function fireTestAlert(opt: typeof TEST_TICKERS[number]) {
+    const alert = buildTestAlert(opt)
+    sendRaw({ type: 'alert', data: alert })
+    setFired(opt.ticker)
+    setTimeout(() => setFired(null), 3000)
+  }
+
   return (
     <div className="max-w-3xl space-y-6">
+      {/* Test Alerts (sandbox only) */}
+      {env === 'sandbox' && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">
+            Fire Test Alert
+          </h2>
+          <div className="bg-[#111] border border-amber-800/40 rounded-lg p-4 space-y-3">
+            <p className="text-xs text-amber-400/70">
+              Sandbox only — injects a synthetic alert into the pipeline. If the pi-agent is connected, it will analyze and respond.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {TEST_TICKERS.map(opt => (
+                <button
+                  key={opt.ticker}
+                  onClick={() => fireTestAlert(opt)}
+                  className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${
+                    fired === opt.ticker
+                      ? 'bg-green-600 text-white'
+                      : 'bg-amber-700/60 text-amber-200 hover:bg-amber-600/80'
+                  }`}
+                >
+                  {fired === opt.ticker ? `Sent ${opt.ticker}!` : `${opt.ticker} ${opt.trigger}`}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-600">
+              Alert appears on the Alerts tab. AI analysis appears on the AI Analysis tab when the pi-agent responds.
+            </p>
+          </div>
+        </section>
+      )}
+
       <section>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">
           Pipe to AI Agent

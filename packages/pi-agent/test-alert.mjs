@@ -2,7 +2,7 @@
 import WebSocket from 'ws'
 import { randomUUID } from 'node:crypto'
 
-const WS_URL = 'ws://localhost:3001'
+const WS_URL = process.argv[2] || 'ws://localhost:3001'
 
 const alert = {
   id: randomUUID(),
