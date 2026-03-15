@@ -136,6 +136,17 @@ export const AgentAnalysisSchema = z.object({
 })
 export type AgentAnalysis = z.infer<typeof AgentAnalysisSchema>
 
+export const AgentStatusSchema = z.object({
+  connected: z.boolean(),
+  state: z.enum(['idle', 'processing', 'error']),
+  model: z.string(),
+  currentTicker: z.string().nullable(),
+  lastError: z.string().nullable(),
+  lastAlertTime: z.string().nullable(),
+  queueDepth: z.number(),
+})
+export type AgentStatus = z.infer<typeof AgentStatusSchema>
+
 export const OptionChainResponseSchema = z.object({
   ticker: z.string(),
   expirations: z.array(OptionExpirationSchema),
@@ -173,6 +184,18 @@ export const WsMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('agent_analysis'),
     data: AgentAnalysisSchema,
+  }),
+  z.object({
+    type: z.literal('alert_history'),
+    data: z.array(OptionsAlertSchema),
+  }),
+  z.object({
+    type: z.literal('analysis_history'),
+    data: z.array(AgentAnalysisSchema),
+  }),
+  z.object({
+    type: z.literal('agent_status'),
+    data: AgentStatusSchema,
   }),
 ])
 export type WsMessage = z.infer<typeof WsMessageSchema>

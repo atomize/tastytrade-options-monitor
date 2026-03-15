@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { AgentStatus } from '@tastytrade-monitor/shared'
 import { useMonitorSocket } from './hooks/useMonitorSocket.js'
 import { ConnectionStatus } from './components/ConnectionStatus.js'
 import { WatchlistTable } from './components/WatchlistTable.js'
@@ -8,10 +9,37 @@ import { AgentExportPanel } from './components/AgentExportPanel.js'
 import { OptionChainPanel } from './components/OptionChainPanel.js'
 import { AnalysisPanel } from './components/AnalysisPanel.js'
 
+function AgentStatusIndicator({ status }: { status: AgentStatus | null }) {
+  if (!status) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] font-mono text-gray-600">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+        Agent offline
+      </div>
+    )
+  }
+
+  const { state, currentTicker, lastError, model } = status
+  const dotColor = state === 'idle' ? 'bg-green-400' : state === 'processing' ? 'bg-amber-400 animate-pulse' : 'bg-red-500'
+  const textColor = state === 'idle' ? 'text-green-400' : state === 'processing' ? 'text-amber-400' : 'text-red-400'
+  const label = state === 'processing' && currentTicker
+    ? `Analyzing ${currentTicker}...`
+    : state === 'error'
+      ? 'Agent error'
+      : 'Agent idle'
+
+  return (
+    <div className={`flex items-center gap-1.5 text-[11px] font-mono ${textColor}`} title={lastError || model}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+      {label}
+    </div>
+  )
+}
+
 type Tab = 'watchlist' | 'options' | 'alerts' | 'positions' | 'analysis' | 'agent'
 
 export function App() {
-  const { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain, sendRaw } = useMonitorSocket()
+  const { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, agentStatus, requestChain, sendRaw } = useMonitorSocket()
   const [activeTab, setActiveTab] = useState<Tab>('watchlist')
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -32,6 +60,7 @@ export function App() {
             tastytrade Monitor
           </h1>
           <ConnectionStatus connected={connected} uptime={uptime} env={env} isDelayed={isDelayed} />
+          <AgentStatusIndicator status={agentStatus} />
         </div>
         <div className="flex items-center gap-4 font-mono text-xs">
           <span className="text-gray-500">Net Liq</span>

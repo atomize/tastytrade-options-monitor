@@ -27,7 +27,28 @@ const PI_TIMEOUT_MS = 60_000
 const alertQueue = []
 const cooldowns = new Map()
 let isProcessing = false
+let currentTicker = null
+let lastError = null
+let lastAlertTime = null
 let ws = null
+
+function sendStatus(state, ticker, error) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  currentTicker = ticker
+  lastError = error
+  ws.send(JSON.stringify({
+    type: 'agent_status',
+    data: {
+      connected: true,
+      state,
+      model: PI_MODEL,
+      currentTicker: ticker,
+      lastError: error,
+      lastAlertTime,
+      queueDepth: alertQueue.length,
+    },
+  }))
+}
 
 function log(msg) {
   console.error(`[runner] ${msg}`)
@@ -128,7 +149,9 @@ function sendAnalysis(alert, analysis) {
 async function processAlert(alert) {
   isProcessing = true
   const ticker = alert.trigger?.ticker || '?'
+  lastAlertTime = new Date().toISOString()
   log(`Processing alert: ${ticker} ${alert.trigger?.type}`)
+  sendStatus('processing', ticker, null)
 
   try {
     const prompt = buildPrompt(alert)
@@ -139,8 +162,10 @@ async function processAlert(alert) {
     } else {
       log(`Empty response from pi for ${ticker}`)
     }
+    sendStatus('idle', null, null)
   } catch (err) {
     log(`pi invocation failed for ${ticker}: ${err.message}`)
+    sendStatus('error', null, err.message)
   }
 
   isProcessing = false
@@ -172,6 +197,8 @@ function handleAlert(data) {
   processAlert(data)
 }
 
+let heartbeatInterval = null
+
 function connect() {
   log(`Connecting to ${WS_URL}`)
 
@@ -185,6 +212,13 @@ function connect() {
 
   ws.on('open', () => {
     log('Connected to monitor WS')
+    sendStatus('idle', null, null)
+
+    if (heartbeatInterval) clearInterval(heartbeatInterval)
+    heartbeatInterval = setInterval(() => {
+      const state = isProcessing ? 'processing' : (lastError ? 'error' : 'idle')
+      sendStatus(state, currentTicker, lastError)
+    }, 30_000)
   })
 
   ws.on('message', (raw) => {
@@ -198,6 +232,8 @@ function connect() {
 
   ws.on('close', () => {
     log('Disconnected from monitor WS, reconnecting...')
+    if (heartbeatInterval) clearInterval(heartbeatInterval)
+    heartbeatInterval = null
     ws = null
     setTimeout(connect, RECONNECT_MS)
   })

@@ -3,7 +3,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs'
 import { resolve, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
-import type { OptionsAlert, WsMessage } from '@tastytrade-monitor/shared'
+import type { OptionsAlert, AgentAnalysis, AgentStatus, WsMessage } from '@tastytrade-monitor/shared'
 import { getAllSnapshots } from './state.js'
 import { getAccountContext } from './account.js'
 import { onAlert } from './alertBus.js'
@@ -14,6 +14,22 @@ import { log } from './logger.js'
 
 let wss: WebSocketServer | null = null
 const startTime = Date.now()
+
+const MAX_ALERTS = 200
+const MAX_ANALYSES = 50
+const recentAlerts: OptionsAlert[] = []
+const recentAnalyses: AgentAnalysis[] = []
+let agentStatus: AgentStatus | null = null
+
+function pushAlert(alert: OptionsAlert): void {
+  recentAlerts.unshift(alert)
+  if (recentAlerts.length > MAX_ALERTS) recentAlerts.length = MAX_ALERTS
+}
+
+function pushAnalysis(analysis: AgentAnalysis): void {
+  recentAnalyses.unshift(analysis)
+  if (recentAnalyses.length > MAX_ANALYSES) recentAnalyses.length = MAX_ANALYSES
+}
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -83,18 +99,19 @@ export function startBroadcaster(): void {
   wss.on('connection', (ws) => {
     log.info(`Dashboard client connected (total: ${wss!.clients.size})`)
 
-    send(ws, {
-      type: 'snapshot',
-      data: getAllSnapshots(),
-    })
-    send(ws, {
-      type: 'account',
-      data: getAccountContext(),
-    })
-    send(ws, {
-      type: 'status',
-      data: buildStatus(),
-    })
+    send(ws, { type: 'snapshot', data: getAllSnapshots() })
+    send(ws, { type: 'account', data: getAccountContext() })
+    send(ws, { type: 'status', data: buildStatus() })
+
+    if (recentAlerts.length > 0) {
+      send(ws, { type: 'alert_history', data: recentAlerts })
+    }
+    if (recentAnalyses.length > 0) {
+      send(ws, { type: 'analysis_history', data: recentAnalyses })
+    }
+    if (agentStatus) {
+      send(ws, { type: 'agent_status', data: agentStatus })
+    }
 
     ws.on('message', (raw) => {
       try {
@@ -103,9 +120,14 @@ export function startBroadcaster(): void {
           handleChainRequest(ws, msg.ticker)
         } else if (msg.type === 'agent_analysis' && msg.data) {
           log.info(`Agent analysis received for ${msg.data.ticker ?? 'unknown'} (model: ${msg.data.model ?? 'unknown'})`)
+          pushAnalysis(msg.data as AgentAnalysis)
           broadcastRaw(String(raw))
         } else if (msg.type === 'alert' && msg.data) {
           log.info(`Injected test alert for ${msg.data.trigger?.ticker ?? 'unknown'}`)
+          pushAlert(msg.data as OptionsAlert)
+          broadcastRaw(String(raw))
+        } else if (msg.type === 'agent_status' && msg.data) {
+          agentStatus = msg.data as AgentStatus
           broadcastRaw(String(raw))
         }
       } catch {
@@ -124,6 +146,7 @@ export function startBroadcaster(): void {
   })
 
   onAlert((alert: OptionsAlert) => {
+    pushAlert(alert)
     broadcast({ type: 'alert', data: alert })
   })
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { TickerSnapshot, OptionsAlert, AccountContext, OptionChainResponse, AgentAnalysis } from '@tastytrade-monitor/shared'
+import type { TickerSnapshot, OptionsAlert, AccountContext, OptionChainResponse, AgentAnalysis, AgentStatus } from '@tastytrade-monitor/shared'
 
 export interface MonitorState {
   connected: boolean
@@ -11,6 +11,7 @@ export interface MonitorState {
   env: 'sandbox' | 'production'
   isDelayed: boolean
   optionChain: OptionChainResponse | null
+  agentStatus: AgentStatus | null
   requestChain: (ticker: string) => void
   sendRaw: (msg: unknown) => void
 }
@@ -42,6 +43,7 @@ export function useMonitorSocket(): MonitorState {
   const [env, setEnv] = useState<'sandbox' | 'production'>('sandbox')
   const [isDelayed, setIsDelayed] = useState(true)
   const [optionChain, setOptionChain] = useState<OptionChainResponse | null>(null)
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -100,6 +102,15 @@ export function useMonitorSocket(): MonitorState {
           case 'agent_analysis':
             setAnalyses(prev => [msg.data, ...prev].slice(0, MAX_ANALYSES))
             break
+          case 'alert_history':
+            setAlerts(msg.data)
+            break
+          case 'analysis_history':
+            setAnalyses(msg.data)
+            break
+          case 'agent_status':
+            setAgentStatus(msg.data)
+            break
         }
       } catch {
         // ignore malformed messages
@@ -115,5 +126,5 @@ export function useMonitorSocket(): MonitorState {
     }
   }, [connect])
 
-  return { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, requestChain, sendRaw }
+  return { connected, snapshots, alerts, analyses, account, uptime, env, isDelayed, optionChain, agentStatus, requestChain, sendRaw }
 }
