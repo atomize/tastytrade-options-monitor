@@ -10,7 +10,7 @@
  */
 
 import { WebSocket } from 'ws'
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,7 +22,7 @@ const PI_MODEL = process.env.PI_MODEL || 'claude-sonnet-4-20250514'
 const MAX_QUEUE = 5
 const COOLDOWN_MS = 300_000
 const RECONNECT_MS = 5_000
-const PI_TIMEOUT_MS = 120_000
+const PI_TIMEOUT_MS = 60_000
 
 const alertQueue = []
 const cooldowns = new Map()
@@ -33,70 +33,77 @@ function log(msg) {
   console.error(`[runner] ${msg}`)
 }
 
-function loadSkillContent(name) {
-  const path = resolve(__dirname, 'skills', name, 'SKILL.md')
-  if (!existsSync(path)) return ''
-  const raw = readFileSync(path, 'utf-8')
-  const bodyStart = raw.indexOf('---', raw.indexOf('---') + 3)
-  return bodyStart > 0 ? raw.slice(bodyStart + 3).trim() : raw
-}
-
-function loadAgentsContext() {
-  const path = resolve(__dirname, 'AGENTS.md')
+function loadFile(name) {
+  const path = resolve(__dirname, name)
   return existsSync(path) ? readFileSync(path, 'utf-8').trim() : ''
 }
 
-function loadSystemPrompt() {
-  const path = resolve(__dirname, 'SYSTEM.md')
-  return existsSync(path) ? readFileSync(path, 'utf-8').trim() : ''
-}
+const systemPrompt = loadFile('SYSTEM.md')
+const agentsContext = loadFile('AGENTS.md')
 
-function selectSkills(alert) {
-  const skills = ['options-trader']
+function strategyHint(alert) {
   const strategies = alert.strategies || []
   const layer = alert.supplyChainLayer || ''
-
-  if (strategies.includes('supply_chain') || layer.startsWith('Layer')) {
-    skills.push('ai-supply-chain')
-  }
-  if (strategies.includes('midterm_macro') || layer.startsWith('Macro')) {
-    skills.push('midterm-macro')
-  }
-  return skills
+  if (strategies.includes('crypto')) return 'Crypto spot — no options available. Directional bias only.'
+  if (strategies.includes('supply_chain') || layer.startsWith('Layer'))
+    return `AI supply chain: ${layer}. Check IV rank for premium selling vs buying.`
+  if (strategies.includes('midterm_macro') || layer.startsWith('Macro'))
+    return `Macro play: ${layer}. 30-90 day horizon, check hedging needs.`
+  return ''
 }
 
 function buildPrompt(alert) {
-  const skills = selectSkills(alert)
-  const skillContent = skills.map(loadSkillContent).filter(Boolean).join('\n\n---\n\n')
-  const agentsContext = loadAgentsContext()
-
   const isDelayed = (alert.agentContext || '').includes('15-min delayed')
-  const isCrypto = (alert.strategies || []).includes('crypto')
+  const hint = strategyHint(alert)
 
-  let prompt = ''
+  let prompt = systemPrompt + '\n\n'
   if (agentsContext) prompt += agentsContext + '\n\n'
-  if (skillContent) prompt += skillContent + '\n\n'
-
-  if (isDelayed) prompt += 'NOTE: This alert is based on 15-minute delayed sandbox data.\n\n'
-  if (isCrypto) prompt += 'NOTE: This is a crypto spot instrument — no options chain is available on tastytrade.\n\n'
-
-  prompt += 'New alert received. Analyze and recommend:\n\n'
-  prompt += alert.agentContext || JSON.stringify(alert, null, 2)
+  if (isDelayed) prompt += '[SANDBOX — 15-min delayed data]\n'
+  if (hint) prompt += `[Strategy: ${hint}]\n\n`
+  prompt += alert.agentContext || JSON.stringify(alert.trigger, null, 2)
+  prompt += '\n\nRespond using the exact format from your system prompt. Under 150 words.'
 
   return prompt
 }
 
 function invokePi(prompt) {
   return new Promise((resolve, reject) => {
-    const child = execFile('pi', ['--print', '--no-session', '-p', prompt], {
-      timeout: PI_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
+    let stdout = ''
+    let stderr = ''
+
+    log(`Spawning pi --print (prompt: ${prompt.length} chars)`)
+
+    const child = spawn('pi', ['--print', '--no-session'], {
       env: { ...process.env, FORCE_COLOR: '0' },
-    }, (err, stdout, stderr) => {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
+
+    child.on('error', (err) => {
+      log(`pi spawn error: ${err.message}`)
+      reject(err)
+    })
+
+    child.on('close', (code) => {
       if (stderr) log(`pi stderr: ${stderr.slice(0, 500)}`)
-      if (err) return reject(err)
+      if (code !== 0) {
+        log(`pi exited with code ${code}`)
+        return reject(new Error(`pi exited with code ${code}`))
+      }
       resolve(stdout.trim())
     })
+
+    child.stdin.write(prompt)
+    child.stdin.end()
+
+    setTimeout(() => {
+      log('pi timeout — killing process')
+      child.kill('SIGTERM')
+      setTimeout(() => child.kill('SIGKILL'), 5000)
+      reject(new Error('pi timed out'))
+    }, PI_TIMEOUT_MS)
   })
 }
 
@@ -204,8 +211,6 @@ function connect() {
 log(`Starting persistent alert runner`)
 log(`Monitor WS: ${WS_URL}`)
 log(`Model: ${PI_MODEL}`)
-
-const systemPrompt = loadSystemPrompt()
 if (systemPrompt) log(`System prompt loaded (${systemPrompt.length} chars)`)
 
 connect()
