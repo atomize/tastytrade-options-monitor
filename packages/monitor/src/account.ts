@@ -16,15 +16,16 @@ export function getAccountContext(): AccountContext {
 export async function fetchAccountData(): Promise<AccountContext> {
   try {
     const client = getClient()
-    const accounts = await client.accountsAndCustomersService.getCustomerAccounts()
-    const items = (accounts as Record<string, unknown>)?.items as Record<string, unknown>[] | undefined
+    const raw = await client.accountsAndCustomersService.getCustomerAccounts()
 
+    const items = Array.isArray(raw) ? raw : (raw as Record<string, unknown>)?.items as unknown[] | undefined
     if (!items?.length) {
-      log.warn('No accounts found')
+      log.warn(`No accounts found (raw type: ${typeof raw}, isArray: ${Array.isArray(raw)}, keys: ${raw ? Object.keys(raw as object).slice(0, 5).join(',') : 'null'})`)
       return cachedAccount
     }
 
-    const acct = items[0] as Record<string, unknown>
+    const acctEntry = items[0] as Record<string, unknown>
+    const acct = (acctEntry.account ?? acctEntry) as Record<string, unknown>
     const accountNumber = String(
       acct['account-number'] ?? acct.accountNumber ?? ''
     )
@@ -34,11 +35,12 @@ export async function fetchAccountData(): Promise<AccountContext> {
     }
 
     await delay(config.rateLimit.minMsBetweenRestCalls)
-    const balData = await client.balancesAndPositionsService.getAccountBalanceValues(accountNumber) as Record<string, unknown>
+    const balRaw = await client.balancesAndPositionsService.getAccountBalanceValues(accountNumber)
+    const balData = (balRaw ?? {}) as Record<string, unknown>
 
     await delay(config.rateLimit.minMsBetweenRestCalls)
-    const posData = await client.balancesAndPositionsService.getPositionsList(accountNumber) as Record<string, unknown>
-    const positions = ((posData as Record<string, unknown>)?.items ?? posData) as Record<string, unknown>[]
+    const posRaw = await client.balancesAndPositionsService.getPositionsList(accountNumber)
+    const positions = (Array.isArray(posRaw) ? posRaw : []) as Record<string, unknown>[]
 
     cachedAccount = {
       netLiq: asNumber(balData?.['net-liquidating-value'] ?? balData?.netLiquidatingValue),
